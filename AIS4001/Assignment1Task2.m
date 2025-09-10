@@ -1,0 +1,66 @@
+%% Duffing equation via RK4 (based on Example 3)
+% ẍ + δ ẋ + α x + β x^3 = γ cos(ω t)
+% Parameters: δ=0.05, α=0, β=1, γ=8, ω=1
+% Initial condition: x(0)=2, ẋ(0)=3
+
+clear; clc;
+
+%% Parameters
+delta = 0.05;
+alpha = 0;
+beta  = 1;
+gamma = 8;
+omega = 1;
+
+%% Time grid
+tf = 200;           % simulation time (s)
+dt = 0.001;        % time step (s)
+t  = 0:dt:tf;
+N  = numel(t)-1;
+
+%% State: [x; v], with v = ẋ
+x  = zeros(2, N+1);
+x(:,1) = [2; 3];   % initial condition
+
+%% Duffing vector field f(t, [x; v])
+f = @(tt, X)[...
+    X(2);                                            % ẋ = v
+    gamma*cos(omega*tt) - delta*X(2) - alpha*X(1) - beta*X(1)^3  % v̇
+];
+
+%% RK4 integration (from Example 3 style)
+for i = 1:N
+    k1 = f(t(i),             x(:,i));
+    k2 = f(t(i)+dt/2, x(:,i) + dt*k1/2);
+    k3 = f(t(i)+dt/2, x(:,i) + dt*k2/2);
+    k4 = f(t(i)+dt,   x(:,i) + dt*k3);
+    x(:,i+1) = x(:,i) + (dt/6)*(k1 + 2*k2 + 2*k3 + k4);
+end
+
+%% For convenience
+xpos = x(1,:);           % displacement x(t)
+vel  = x(2,:);           % velocity v(t)
+
+%% Plots
+figure(1); clf
+subplot(2,1,1)
+plot(t, xpos, 'LineWidth', 1.5); grid on
+ylabel('x(t)')
+title('Duffing oscillator (RK4), \delta=0.05, \alpha=0, \beta=1, \gamma=8, \omega=1')
+
+subplot(2,1,2)
+plot(t, vel, 'LineWidth', 1.5); grid on
+ylabel('v(t)'); xlabel('time (s)')
+
+figure(2); clf
+plot(xpos, vel, 'LineWidth', 1); grid on
+xlabel('x'); ylabel('v'); title('Phase portrait')
+
+%% (Optional) Poincaré section at drive period T = 2\pi/\omega
+Tdrive = 2*pi/omega;
+% sample near multiples of Tdrive
+idx = abs(mod(t, Tdrive)) < dt/2;     % simple stroboscopic sampling
+figure(3); clf
+plot(xpos(idx), vel(idx), 'MarkerSize', 6); grid on
+xlabel('x (stroboscopic)'); ylabel('v (stroboscopic)')
+title('Poincaré section (every T = 2\pi/\omega)')
