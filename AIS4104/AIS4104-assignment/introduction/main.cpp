@@ -113,10 +113,14 @@ void rotation_matrix_test()
 }
 
 // T.3 a)
+// Equation (3.62) page 87, MR pre-print 2019
 Eigen::Matrix4d transformation_matrix(const Eigen::Matrix3d &r, const Eigen::Vector3d &p)
 {
     Eigen::Matrix4d matrix;
-    // implement the necessary equations and functionality.
+    matrix << r(0, 0), r(0, 1), r(0, 2), p(0),
+        r(1, 0), r(1, 1), r(1, 2), p(1),
+        r(2, 0), r(2, 1), r(2, 2), p(2),
+        0, 0, 0, 1;
     return matrix;
 }
 
@@ -129,9 +133,30 @@ void transformation_matrix_test()
     std::cout << transformation_matrix(r, v) << std::endl;
 }
 
+// T.3 c)
+// Equation (3.65) page 88, MR pre-print 2019
+void transform_vector()
+{
+    Eigen::Vector3d e(60.0, 45.0, 0.0);
+    Eigen::Matrix3d R = rotation_matrix_from_euler_zyx(e);
+    Eigen::Vector3d p(0.0, 0.0, 10.0);
+
+    Eigen::Matrix4d T = transformation_matrix(R, p);
+
+    Eigen::Vector4d va_h;
+    va_h << 2.5, 3.0, -10.0, 1.0;
+
+    Eigen::Vector4d vw_h = T * va_h;
+    Eigen::Vector3d vw = vw_h.head<3>();
+
+    std::cout << "v_w: " << vw.transpose() << std::endl;
+}
+
 int main()
 {
     skew_symmetric_test();
     rotation_matrix_test();
+    transformation_matrix_test();
+    transform_vector();
     return 0;
 }
