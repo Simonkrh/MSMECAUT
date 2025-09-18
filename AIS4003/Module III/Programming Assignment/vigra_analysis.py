@@ -10,12 +10,10 @@ def plot_weekly_rainfall(file_path="Rainfall_vigra.csv"):
         df["Tid(norsk normaltid)"], format="%d.%m.%Y"
     )
 
-    df.rename(columns={"Nedbør (døgn)": "rainfall"}, inplace=True)
-
-    df["rainfall"] = pd.to_numeric(df["rainfall"], errors="coerce")
+    df["rainfall"] = pd.to_numeric(df["Nedbør (døgn)"], errors="coerce")
 
     weekly_rainfall = (
-        df.set_index("Tid(norsk normaltid)")["rainfall"].resample("W").sum()
+        df.set_index("Tid(norsk normaltid)")["Nedbør (døgn)"].resample("W").sum()
     )
 
     plt.figure(figsize=(12, 5))
@@ -77,11 +75,7 @@ def plot_hurricane_events(file_path="Wind_vigra.csv"):
 
 
 def plot_average_temp_by_month(
-    file_path="Temperature_vigra.csv",
-    month=1,
-    year_start=2013,
-    year_end=2023,
-    show_errorbars=False,
+    file_path="Temperature_vigra.csv", month=1, year_start=2013, year_end=2023
 ):
     if not (1 <= int(month) <= 12):
         raise ValueError("Invalid month. Please enter a number between 1 and 12.")
@@ -129,11 +123,9 @@ def plot_average_temp_by_month(
     s = yearly["std"].values
 
     plt.figure(figsize=(12, 5))
-    if show_errorbars:
-        plt.errorbar(x, y, yerr=s, fmt="o-", capsize=5, label="Average ±1 std dev")
-    else:
-        plt.plot(x, y, marker="o", label="Average temperature")
-        plt.fill_between(x, y - s, y + s, alpha=0.2, label="±1 standard deviation")
+
+    plt.plot(x, y, marker="o", label="Average temperature")
+    plt.fill_between(x, y - s, y + s, alpha=0.2, label="±1 standard deviation")
 
     plt.title(
         f"Average Daily Mean Temperature in {calendar.month_name[month]} "
@@ -145,4 +137,6 @@ def plot_average_temp_by_month(
 
 
 if __name__ == "__main__":
+    # plot_weekly_rainfall()
+    # plot_hurricane_events()
     plot_average_temp_by_month(month=1)
