@@ -2,26 +2,22 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import calendar
 
+DATE_COLUNM = "Tid(norsk normaltid)"
+
 
 def plot_weekly_rainfall(file_path="Rainfall_vigra.csv"):
-    df = pd.read_csv(file_path, sep=";", decimal=",")
-
-    df["Tid(norsk normaltid)"] = pd.to_datetime(
-        df["Tid(norsk normaltid)"], format="%d.%m.%Y"
+    df = pd.read_csv(
+        file_path,
+        sep=";",
+        decimal=",",
+        parse_dates=[DATE_COLUNM],
+        dayfirst=True,
     )
 
-    df["rainfall"] = pd.to_numeric(df["Nedbør (døgn)"], errors="coerce")
-
-    weekly_rainfall = (
-        df.set_index("Tid(norsk normaltid)")["Nedbør (døgn)"].resample("W").sum()
-    )
+    weekly_rainfall = df.set_index(DATE_COLUNM)["Nedbør (døgn)"].resample("W").sum()
 
     plt.figure(figsize=(12, 5))
-    plt.plot(
-        weekly_rainfall.index,
-        weekly_rainfall.values,
-        label="Weekly Rainfall",
-    )
+    plt.plot(weekly_rainfall.index, weekly_rainfall.values, label="Weekly Rainfall")
     plt.title("Weekly Rainfall at Vigra Weather Station (2013–2023)")
     plt.xlabel("Date")
     plt.ylabel("Rainfall (mm)")
@@ -29,107 +25,78 @@ def plot_weekly_rainfall(file_path="Rainfall_vigra.csv"):
 
 
 def plot_hurricane_events(file_path="Wind_vigra.csv"):
-    df = pd.read_csv(file_path, sep=";", decimal=",", dtype=str)
-
-    df["Tid(norsk normaltid)"] = pd.to_datetime(
-        df["Tid(norsk normaltid)"], format="%d.%m.%Y"
+    df = pd.read_csv(
+        file_path,
+        sep=";",
+        decimal=",",
+        parse_dates=[DATE_COLUNM],
+        dayfirst=True,
+        na_values=["-", "NaN"],
     )
+    column = "Høyeste vindkast (døgn)"
 
-    col = "Høyeste vindkast (døgn)"
-
-    clean = (
-        df[col]
-        .astype(str)
-        .str.replace("\u00a0", " ", regex=False)
-        .str.strip()
-        .str.replace(",", ".", regex=False)
-        .str.extract(r"([-+]?\d+(?:\.\d+)?)")[0]
-    )
-
-    df[col] = pd.to_numeric(clean, errors="coerce")
-
-    hurricane_days = df[df["Høyeste vindkast (døgn)"] > 32.6].copy()
-
+    hurricane_days = df[df[column] > 32.6].copy()
     if hurricane_days.empty:
         print("No hurricane-level events found in dataset.")
         return
 
-    hurricane_days.sort_values("Tid(norsk normaltid)", inplace=True)
-
+    hurricane_days.sort_values(DATE_COLUNM, inplace=True)
     hurricane_days["event_id"] = (
-        hurricane_days["Tid(norsk normaltid)"].diff().dt.days > 1
+        hurricane_days[DATE_COLUNM].diff().dt.days > 1
     ).cumsum()
 
     events = hurricane_days.groupby("event_id").first()
-    events["year"] = events["Tid(norsk normaltid)"].dt.year
-
-    yearly_counts = events["year"].value_counts().sort_index()
+    yearly_counts = events[DATE_COLUNM].dt.year.value_counts().sort_index()
 
     plt.figure(figsize=(10, 5))
     plt.bar(yearly_counts.index.astype(str), yearly_counts.values)
     plt.title("Hurricane-Level Wind Events (>32.6 m/s) per Year")
     plt.xlabel("Year")
     plt.ylabel("Number of Events")
-
     plt.show()
 
 
 def plot_average_temp_by_month(
     file_path="Temperature_vigra.csv", month=1, year_start=2013, year_end=2023
 ):
-    if not (1 <= int(month) <= 12):
+    month = int(month)
+    if not (1 <= month <= 12):
         raise ValueError("Invalid month. Please enter a number between 1 and 12.")
 
-    date_col = "Tid(norsk normaltid)"
-    mean_col = "Middeltemperatur (døgn)"
-
-    na_tokens = ["-", "–", "−", "", " ", "NaN"]
     df = pd.read_csv(
         file_path,
         sep=";",
         decimal=",",
-        na_values=na_tokens,
-        keep_default_na=True,
+        parse_dates=[DATE_COLUNM],
+        dayfirst=True,
+        na_values=["-", "NaN"],
     )
+    mean_column = "Middeltemperatur (døgn)"
 
-    df[date_col] = pd.to_datetime(df[date_col], format="%d.%m.%Y", errors="coerce")
-
-    s = df[mean_col].astype(str)
-    s = s.str.replace("\u2212", "-", regex=False)
-    s = s.str.replace(",", ".", regex=False).str.strip()
-    s = s.mask(s.isin(["-", "–", "−", ""]))
-    df["mean_temp"] = pd.to_numeric(s, errors="coerce")
-
-    df = df.dropna(subset=[date_col, "mean_temp"])
-
-    df = df[
-        (df[date_col].dt.month == month)
-        & (df[date_col].dt.year.between(year_start, year_end))
-    ]
+    selection = (df[DATE_COLUNM].dt.month == month) & df[DATE_COLUNM].dt.year.between(
+        year_start, year_end
+    )
+    df = df.loc[selection, [DATE_COLUNM, mean_column]].dropna()
     if df.empty:
         print("No data found for the chosen month/year range.")
         return
 
     yearly = (
-        df.groupby(df[date_col].dt.year)["mean_temp"]
+        df.groupby(df[DATE_COLUNM].dt.year)[mean_column]
         .agg(["mean", "std", "count"])
         .sort_index()
+        .fillna({"std": 0.0})
     )
-
-    yearly["std"] = yearly["std"].fillna(0.0)
 
     x = yearly.index.values
     y = yearly["mean"].values
     s = yearly["std"].values
 
     plt.figure(figsize=(12, 5))
-
     plt.plot(x, y, marker="o", label="Average temperature")
     plt.fill_between(x, y - s, y + s, alpha=0.2, label="±1 standard deviation")
-
     plt.title(
-        f"Average Daily Mean Temperature in {calendar.month_name[month]} "
-        f"({year_start}–{year_end})"
+        f"Average Daily Mean Temperature in {calendar.month_name[month]} ({year_start}–{year_end})"
     )
     plt.xlabel("Year")
     plt.ylabel("Temperature (°C)")
@@ -139,4 +106,4 @@ def plot_average_temp_by_month(
 if __name__ == "__main__":
     # plot_weekly_rainfall()
     # plot_hurricane_events()
-    plot_average_temp_by_month(month=1)
+    plot_average_temp_by_month(year_start=2010, year_end=2015, month=5)
