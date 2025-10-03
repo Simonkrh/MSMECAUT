@@ -1,16 +1,12 @@
 {
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg/master/scripts/vcpkg.schema.json",
   "name": "test",
+  "version-string": "0.1.0",
+  "builtin-baseline": "0d9d4684352ba8de70bdf251c6fc9a3c464fa12b",
   "dependencies": [
-    "eigen3",
-    "orocos-kdl"
+    "eigen3"
   ],
-  "features": {
-    "nlopt": {
-      "description": "Download the non-linear optimization library.",
-      "dependencies": [
-        "assimp"
-      ]
-    }
-  }
+  "overrides": [
+    { "name": "eigen3", "version-string": "3.4.0" }
+  ]
 }
