@@ -309,11 +309,11 @@ Eigen::Matrix3d matrix_exponential(const Eigen::Vector3d &w, double theta)
     return rotation_matrix_from_axis_angle(w, theta * 180.0 / M_PI);
 }
 
-void test_matrix_exponential()
+void test_matrix_exponential_SO3()
 {
     std::cout << "========================== T.3 a) ==========================\n";
 
-    // Rotation of 90° about z-axis
+    // Rotation of 90 degree about z-axis
     Eigen::Vector3d w(0, 0, 1);
     double theta = M_PI / 2.0;
 
@@ -325,6 +325,114 @@ void test_matrix_exponential()
               << "0 -1  0\n"
               << "1  0  0\n"
               << "0  0  1 \n\n";
+}
+
+// ====================================== T.3 b) ======================================
+// Equations (3.53-3.54) on page 84, MR pre-print 2019
+std::pair<Eigen::Vector3d, double> matrix_logarithm(const Eigen::Matrix3d &R)
+{
+    double theta = std::acos(std::clamp((R.trace() - 1.0) * 0.5, -1.0, 1.0));
+    double s = std::sin(theta);
+    Eigen::Vector3d w((R(2, 1) - R(1, 2)) / (2 * s),
+                      (R(0, 2) - R(2, 0)) / (2 * s),
+                      (R(1, 0) - R(0, 1)) / (2 * s));
+    w.normalize();
+    return {w, theta};
+}
+
+void test_matrix_logarithm_SO3()
+{
+    std::cout << "========================== T.3 b) ==========================\n";
+
+    // Rotation of 90 degrees about z-axis
+    Eigen::Vector3d w_true(0, 0, 1);
+    double theta_true = M_PI / 2.0;
+
+    Eigen::Matrix3d R = matrix_exponential(w_true, theta_true);
+
+    auto [w_hat, theta] = matrix_logarithm(R);
+
+    std::cout << "Expected axis:   " << w_true.transpose() << "\n";
+    std::cout << "Expected angle:  " << theta_true << "\n";
+    std::cout << "Recovered axis:  " << w_hat.transpose() << "\n";
+    std::cout << "Recovered angle: " << theta << "\n\n";
+}
+
+// ====================================== T.3 c) ======================================
+// Equation (3.88) on page 103, MR pre-print 2019
+Eigen::Matrix4d matrix_exponential(const Eigen::Vector3d &w, const Eigen::Vector3d &v, double theta)
+{
+    Eigen::Matrix3d I = Eigen::Matrix3d::Identity();
+    Eigen::Matrix3d w_skew = skew_symmetric(w);
+
+    Eigen::Matrix3d R = I + std::sin(theta) * w_skew +
+                        (1 - std::cos(theta)) * (w_skew * w_skew);
+
+    Eigen::Matrix3d V = I * theta + (1 - std::cos(theta)) * w_skew +
+                        (theta - std::sin(theta)) * (w_skew * w_skew);
+    Eigen::Vector3d p = V * v;
+
+    Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
+    T.block<3, 3>(0, 0) = R;
+    T.block<3, 1>(0, 3) = p;
+
+    return T;
+}
+
+void test_matrix_exponential_SE3()
+{
+    std::cout << "========================== T.3 c) ==========================\n";
+
+    Eigen::Vector3d w(0, 0, 1); // rotate about z
+    Eigen::Vector3d v(1, 0, 0); // translation direction
+    double theta = M_PI / 2.0;  // 90 degrees
+
+    Eigen::Matrix4d T = matrix_exponential(w, v, theta);
+
+    std::cout << "T =\n"
+              << T << "\n\n";
+    std::cout << "Expected R =\n"
+              << "0 -1  0\n"
+              << "1  0  0\n"
+              << "0  0  1\n\n";
+}
+
+// ====================================== T.3 d) ======================================
+// Equations (3.91–3.92) on page 104, MR pre-print 2019
+std::pair<Eigen::VectorXd, double> matrix_logarithm(const Eigen::Matrix4d &T)
+{
+    Eigen::Matrix3d R = T.block<3, 3>(0, 0);
+    Eigen::Vector3d p = T.block<3, 1>(0, 3);
+
+    auto [w, theta] = matrix_logarithm(R);
+    Eigen::VectorXd S(6);
+
+    if (theta < 1e-12)
+    {
+        S << Eigen::Vector3d::Zero(), p;
+        return {S, p.norm()};
+    }
+
+    Eigen::Matrix3d W = skew_symmetric(w);
+    Eigen::Vector3d v = (Eigen::Matrix3d::Identity() - 0.5 * W +
+                         (1.0 / theta - 0.5 / std::tan(theta / 2.0)) * (W * W)) *
+                        p;
+
+    S << w, v;
+    return {S, theta};
+}
+
+void test_matrix_logarithm_SE3()
+{
+    std::cout << "========================== T.3 c) ==========================\n";
+
+    Eigen::Vector3d w(0, 0, 1), v(1, 0, 0);
+    double theta = M_PI / 2;
+    Eigen::Matrix4d T = matrix_exponential(w, v, theta);
+
+    auto [S, th] = matrix_logarithm(T);
+    std::cout << "S^T = " << S.transpose() << "\n";
+    std::cout << "theta = " << th << "\n\n";
 }
 
 // ====================================== main ======================================
@@ -352,5 +460,14 @@ int main()
     sensor_wrench_example_3_28();
 
     // T.3 a)
-    test_matrix_exponential();
+    test_matrix_exponential_SO3();
+
+    // T.3 b)
+    test_matrix_logarithm_SO3();
+
+    // T.3 c)
+    test_matrix_exponential_SE3();
+
+    // T.3 d)
+    test_matrix_logarithm_SE3();
 }
