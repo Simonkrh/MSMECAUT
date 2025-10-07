@@ -3,7 +3,8 @@
 #include <numbers>
 #include <cmath>
 
-constexpr double M_PI = std::numbers::pi;
+// NB: Uncomment line below on windows
+// constexpr double M_PI = std::numbers::pi;
 
 // ====================================== T.1 a) ======================================
 // Equations (B.3)–(B.5) on page 579, MR pre-print 2019
@@ -397,7 +398,7 @@ void test_matrix_exponential_SE3()
               << "0  0  1\n\n";
 }
 
-// ====================================== T.3 d) ======================================
+/// ====================================== T.3 d) ======================================
 // Equations (3.91–3.92) on page 104, MR pre-print 2019
 std::pair<Eigen::VectorXd, double> matrix_logarithm(const Eigen::Matrix4d &T)
 {
@@ -414,9 +415,10 @@ std::pair<Eigen::VectorXd, double> matrix_logarithm(const Eigen::Matrix4d &T)
     }
 
     Eigen::Matrix3d W = skew_symmetric(w);
-    Eigen::Vector3d v = (Eigen::Matrix3d::Identity() - 0.5 * W +
-                         (1.0 / theta - 0.5 / std::tan(theta / 2.0)) * (W * W)) *
-                        p;
+
+    Eigen::Matrix3d Ginv = (1.0 / theta) * Eigen::Matrix3d::Identity() - 0.5 * W + (1.0 / theta - 0.5 / std::tan(theta / 2.0)) * (W * W);
+
+    Eigen::Vector3d v = Ginv * p;
 
     S << w, v;
     return {S, theta};
@@ -424,15 +426,244 @@ std::pair<Eigen::VectorXd, double> matrix_logarithm(const Eigen::Matrix4d &T)
 
 void test_matrix_logarithm_SE3()
 {
-    std::cout << "========================== T.3 c) ==========================\n";
+    std::cout << "========================== T.3 d) ==========================\n";
 
     Eigen::Vector3d w(0, 0, 1), v(1, 0, 0);
-    double theta = M_PI / 2;
+    double theta = M_PI / 2.0;
     Eigen::Matrix4d T = matrix_exponential(w, v, theta);
 
     auto [S, th] = matrix_logarithm(T);
+
     std::cout << "S^T = " << S.transpose() << "\n";
-    std::cout << "theta = " << th << "\n\n";
+    std::cout << "theta = " << th << "\n";
+    std::cout << "Expected S^T = 0 0 1 1 0 0\n";
+    std::cout << "Expected theta = " << M_PI / 2.0 << "\n\n";
+}
+
+// ====================================== T.4 a) ======================================
+// Equation (3.62) on page 87, MR pre-print 2019
+void print_pose(const std::string &label, const Eigen::Matrix4d &T)
+{
+    const auto R = T.block<3, 3>(0, 0);
+    const auto p = T.block<3, 1>(0, 3);
+    const Eigen::Vector3d e_deg = euler_zyx_from_rotation_matrix(R) * (180.0 / M_PI);
+    std::cout << label << "\n"
+              << "Euler ZYX (deg): " << e_deg.transpose() << "\n"
+              << "Position:        " << p.transpose() << "\n\n";
+}
+
+void test_print_pose()
+{
+    std::cout << "========================== T.4 a) ==========================\n";
+    Eigen::Vector3d e_deg(90.0, 30.0, -45.0);
+    Eigen::Matrix3d R = rotate_z(e_deg[0] * M_PI / 180.0) * rotate_y(e_deg[1] * M_PI / 180.0) * rotate_x(e_deg[2] * M_PI / 180.0);
+    Eigen::Matrix4d T = transformation_matrix(R, Eigen::Vector3d(1, 2, 3));
+
+    print_pose("Pose T", T);
+
+    std::cout << "Expected Euler ZYX (deg):  90  30  -45\n";
+    std::cout << "Expected Position:         1  2   3\n\n";
+}
+
+// ====================================== T.4 b) ======================================
+inline Eigen::Matrix4d Tx(double a)
+{
+    return transformation_matrix(Eigen::Matrix3d::Identity(), Eigen::Vector3d(a, 0, 0));
+}
+
+// Equation (4.4) on page 135, MR pre-print 2019
+Eigen::Matrix4d planar_3r_fk_transform(const std::vector<double> &joint_positions)
+{
+    const double L1 = 10.0, L2 = 10.0, L3 = 10.0;
+
+    const double q1d = joint_positions.size() > 0 ? joint_positions[0] : 0.0;
+    const double q2d = joint_positions.size() > 1 ? joint_positions[1] : 0.0;
+    const double q3d = joint_positions.size() > 2 ? joint_positions[2] : 0.0;
+
+    const double q1 = q1d * M_PI / 180.0;
+    const double q2 = q2d * M_PI / 180.0;
+    const double q3 = q3d * M_PI / 180.0;
+
+    Eigen::Matrix4d T =
+        transformation_matrix(rotate_z(q1), Eigen::Vector3d::Zero()) * Tx(L1) *
+        transformation_matrix(rotate_z(q2), Eigen::Vector3d::Zero()) * Tx(L2) *
+        transformation_matrix(rotate_z(q3), Eigen::Vector3d::Zero()) * Tx(L3);
+
+    return T;
+}
+
+void test_planar_3r_fk()
+{
+    std::cout << "========================== T.4 b) ==========================\n";
+
+    const std::vector<std::vector<double>> J = {
+        {0.0, 0.0, 0.0},
+        {90.0, 0.0, 0.0},
+        {0.0, 90.0, 0.0},
+        {0.0, 0.0, 90.0},
+        {10.0, -15.0, 2.75}};
+    const char *names[] = {"j1", "j2", "j3", "j4", "j5"};
+
+    for (int i = 0; i < (int)J.size(); ++i)
+    {
+        Eigen::Matrix4d T = planar_3r_fk_transform(J[i]);
+        print_pose(std::string("Pose ") + names[i], T);
+    }
+}
+
+// ====================================== T.4 c) ======================================
+Eigen::Matrix4d planar_3r_fk_screw(const std::vector<double> &joint_positions)
+{
+    const double L1 = 10.0, L2 = 10.0, L3 = 10.0;
+
+    const double q1 = (joint_positions.size() > 0 ? joint_positions[0] : 0.0) * M_PI / 180.0;
+    const double q2 = (joint_positions.size() > 1 ? joint_positions[1] : 0.0) * M_PI / 180.0;
+    const double q3 = (joint_positions.size() > 2 ? joint_positions[2] : 0.0) * M_PI / 180.0;
+
+    const Eigen::Vector3d omega(0, 0, 1);
+    const Eigen::VectorXd S1 = screw_axis(Eigen::Vector3d(0, 0, 0), omega, 0.0);
+    const Eigen::VectorXd S2 = screw_axis(Eigen::Vector3d(L1, 0, 0), omega, 0.0);
+    const Eigen::VectorXd S3 = screw_axis(Eigen::Vector3d(L1 + L2, 0, 0), omega, 0.0);
+
+    const Eigen::Matrix4d M = transformation_matrix(Eigen::Matrix3d::Identity(),
+                                                    Eigen::Vector3d(L1 + L2 + L3, 0, 0));
+
+    const Eigen::Matrix4d T1 = matrix_exponential(S1.head<3>(), S1.tail<3>(), q1);
+    const Eigen::Matrix4d T2 = matrix_exponential(S2.head<3>(), S2.tail<3>(), q2);
+    const Eigen::Matrix4d T3 = matrix_exponential(S3.head<3>(), S3.tail<3>(), q3);
+
+    return T1 * T2 * T3 * M;
+}
+
+void test_planar_3r_fk_screw()
+{
+    std::cout << "========================== T.4 c) ==========================\n";
+
+    const std::vector<std::vector<double>> tests = {
+        {0.0, 0.0, 0.0},
+        {90.0, 0.0, 0.0},
+        {0.0, 90.0, 0.0},
+        {0.0, 0.0, 90.0},
+        {10.0, -15.0, 2.75}};
+    const char *name[] = {"j1", "j2", "j3", "j4", "j5"};
+
+    for (int i = 0; i < (int)tests.size(); ++i)
+    {
+        Eigen::Matrix4d T_chain = planar_3r_fk_transform(tests[i]);
+        Eigen::Matrix4d T_poe = planar_3r_fk_screw(tests[i]);
+
+        std::cout << "Pose " << name[i] << " (chain):\n";
+        print_pose("", T_chain);
+
+        std::cout << "Pose " << name[i] << " (PoE):\n";
+        print_pose("", T_poe);
+
+        std::cout << "||T_chain - T_PoE||_max = "
+                  << (T_chain - T_poe).cwiseAbs().maxCoeff() << "\n\n";
+    }
+}
+
+// ====================================== T.5 a) ======================================
+static inline Eigen::Matrix4d A(double a, double alpha, double d, double theta)
+{
+    Eigen::Matrix4d T = transformation_matrix(rotate_z(theta), {0, 0, d});
+    T = T * transformation_matrix(Eigen::Matrix3d::Identity(), {a, 0, 0});
+    T = T * transformation_matrix(rotate_x(alpha), {0, 0, 0});
+    return T;
+}
+
+Eigen::Matrix4d ur3e_fk_screw(const std::vector<double> &q_deg)
+{
+    static const double a_link[6] = {0.0, -0.24355, -0.21320, 0.0, 0.0, 0.0};
+    static const double d_link[6] = {0.15185, 0.0, 0.0, 0.13105, 0.08535, 0.09210};
+    static const double alpha_link[6] = {M_PI / 2, 0.0, 0.0, M_PI / 2, -M_PI / 2, 0.0};
+
+    auto rad = [](double deg)
+    { return deg * M_PI / 180.0; };
+
+    Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
+    Eigen::Vector3d o = Eigen::Vector3d::Zero();
+    Eigen::Vector3d z = Eigen::Vector3d::UnitZ();
+    Eigen::Matrix<double, 6, 1> S[6];
+
+    for (int i = 0; i < 6; ++i)
+    {
+        S[i].head<3>() = z;
+        S[i].tail<3>() = -z.cross(o);
+
+        T = T * A(a_link[i], alpha_link[i], d_link[i], 0.0);
+        o = T.block<3, 1>(0, 3);
+        z = T.block<3, 3>(0, 0) * Eigen::Vector3d::UnitZ();
+    }
+    const Eigen::Matrix4d M = T;
+
+    Eigen::Matrix4d G = Eigen::Matrix4d::Identity();
+    for (int i = 0; i < 6; ++i)
+    {
+        const double th = (i < (int)q_deg.size()) ? rad(q_deg[i]) : 0.0;
+        G *= matrix_exponential(S[i].head<3>(), S[i].tail<3>(), th);
+    }
+    return G * M;
+}
+
+void test_ur3e_fk_screw()
+{
+    std::cout << "========================== T.5 a) ==========================\n";
+    std::vector<std::vector<double>> J = {
+        {0, 0, 0, -90, 0, 0},
+        {0, -180, 0, 0, 0, 0},
+        {0, -90, 0, 0, 0, 0}};
+    const char *name[] = {"j1", "j2", "j3"};
+    for (int i = 0; i < 3; ++i)
+    {
+        Eigen::Matrix4d T = ur3e_fk_screw(J[i]);
+        print_pose(std::string("UR3e ") + name[i], T);
+    }
+}
+
+// ====================================== T.5 b) ======================================
+Eigen::Matrix4d ur3e_fk_transform(const std::vector<double> &q_deg)
+{
+    static const double a[6] = {0.0, -0.24355, -0.21320, 0.0, 0.0, 0.0};
+    static const double d[6] = {0.15185, 0.0, 0.0, 0.13105, 0.08535, 0.09210};
+    static const double alpha[6] = {M_PI / 2, 0.0, 0.0, M_PI / 2, -M_PI / 2, 0.0};
+
+    auto rad = [](double deg)
+    { return deg * M_PI / 180.0; };
+
+    Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
+    for (int i = 0; i < 6; ++i)
+    {
+        const double theta = (i < (int)q_deg.size()) ? rad(q_deg[i]) : 0.0;
+        T *= A(a[i], alpha[i], d[i], theta); // your DH “A” from T.5b
+    }
+    return T;
+}
+
+void test_ur3e_fk_transform_vs_screw()
+{
+    std::cout << "========================== T.5 b) ==========================\n";
+
+    const std::vector<std::vector<double>> tests = {
+        {0, 0, 0, -90, 0, 0},
+        {0, -180, 0, 0, 0, 0},
+        {0, -90, 0, 0, 0, 0}};
+    const char *name[] = {"j1", "j2", "j3"};
+
+    for (int i = 0; i < (int)tests.size(); ++i)
+    {
+        Eigen::Matrix4d T_screw = ur3e_fk_screw(tests[i]);
+        Eigen::Matrix4d T_dh = ur3e_fk_transform(tests[i]);
+
+        std::cout << "UR3e " << name[i] << " (PoE):\n";
+        print_pose("", T_screw);
+
+        std::cout << "UR3e " << name[i] << " (DH):\n";
+        print_pose("", T_dh);
+
+        double err = (T_screw - T_dh).cwiseAbs().maxCoeff();
+        std::cout << "||T_PoE - T_DH||_max = " << err << "\n\n";
+    }
 }
 
 // ====================================== main ======================================
@@ -470,4 +701,19 @@ int main()
 
     // T.3 d)
     test_matrix_logarithm_SE3();
+
+    // T.4 a)
+    test_print_pose();
+
+    // T.4 b)
+    test_planar_3r_fk();
+
+    // T.4 c)
+    test_planar_3r_fk_screw();
+
+    // T.5 a)
+    test_ur3e_fk_screw();
+
+    // T.5 b)
+    test_ur3e_fk_transform_vs_screw();
 }
