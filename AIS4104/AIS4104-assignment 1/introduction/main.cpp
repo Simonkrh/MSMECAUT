@@ -2,6 +2,8 @@
 
 #include <Eigen/Dense>
 
+constexpr double radians = EIGEN_PI / 180.0;
+
 // T.1 a)
 // Equation (3.30) page 75, MR pre-print 2019
 Eigen::Matrix3d skew_symmetric(Eigen::Vector3d vec)
@@ -34,55 +36,54 @@ Eigen::Matrix3d rotation_matrix_from_frame_axes(const Eigen::Vector3d &x, const 
 }
 
 // T.2 b)
-// Equation on page 65, MR pre-print 2019
+// Equation on page 72, MR pre-print 2019
 Eigen::Matrix3d rotate_x(double degrees)
 {
-    const double radians = degrees * M_PI / 180.0;
+    const double theta = degrees * radians;
     Eigen::Matrix3d matrix;
-    matrix << 1, 0, 0,
-        0, cos(radians), -sin(radians),
-        0, sin(radians), cos(radians);
+    matrix << 1.0, 0.0, 0.0,
+        0.0, std::cos(theta), -std::sin(theta),
+        0.0, std::sin(theta), std::cos(theta);
     return matrix;
 }
 
 // T.2 c)
-// Equation on page 65, MR pre-print 2019
+// Equation on page 72, MR pre-print 2019
 Eigen::Matrix3d rotate_y(double degrees)
 {
-    const double radians = degrees * M_PI / 180.0;
+    const double theta = degrees * radians;
     Eigen::Matrix3d matrix;
-    matrix << cos(radians), 0, sin(radians),
-        0, 1, 0,
-        -sin(radians), 0, cos(radians);
+    matrix << std::cos(theta), 0.0, std::sin(theta),
+        0.0, 1.0, 0.0,
+        -std::sin(theta), 0.0, std::cos(theta);
     return matrix;
 }
 
 // T.2 d)
-// Equation on page 65, MR pre-print 2019
+// Equation on page 72, MR pre-print 2019
 Eigen::Matrix3d rotate_z(double degrees)
 {
-    const double radians = degrees * M_PI / 180.0;
+    const double theta = degrees * radians;
     Eigen::Matrix3d matrix;
-    matrix << cos(radians), -sin(radians), 0,
-        sin(radians), cos(radians), 0,
-        0, 0, 1;
+    matrix << std::cos(theta), -std::sin(theta), 0.0,
+        std::sin(theta), std::cos(theta), 0.0, 0.0, 0.0, 1.0;
     return matrix;
 }
 
 // T.2 e)
-// Equation on page 65, MR pre-print 2019
+// Equation on page 72, MR pre-print 2019
 Eigen::Matrix3d rotation_matrix_from_axis_angle(const Eigen::Vector3d &axis,
                                                 double degrees)
 {
     Eigen::Vector3d u = axis.normalized();
-    const double radians = degrees * M_PI / 180.0;
-    const double cos = std::cos(radians);
-    const double sin = std::sin(radians);
+    const double theta = degrees * radians;
+    const double c = std::cos(theta);
+    const double s = std::sin(theta);
 
     Eigen::Matrix3d matrix;
-    matrix << cos + u.x() * u.x() * (1 - cos), u.x() * u.y() * (1 - cos) - u.z() * sin, u.x() * u.z() * (1 - cos) + u.y() * sin,
-        u.y() * u.x() * (1 - cos) + u.z() * sin, cos + u.y() * u.y() * (1 - cos), u.y() * u.z() * (1 - cos) - u.x() * sin,
-        u.z() * u.x() * (1 - cos) - u.y() * sin, u.z() * u.y() * (1 - cos) + u.x() * sin, cos + u.z() * u.z() * (1 - cos);
+    matrix << c + u.x() * u.x() * (1.0 - c), u.x() * u.y() * (1.0 - c) - u.z() * s, u.x() * u.z() * (1.0 - c) + u.y() * s,
+        u.y() * u.x() * (1.0 - c) + u.z() * s, c + u.y() * u.y() * (1.0 - c), u.y() * u.z() * (1.0 - c) - u.x() * s,
+        u.z() * u.x() * (1.0 - c) - u.y() * s, u.z() * u.y() * (1.0 - c) + u.x() * s, c + u.z() * u.z() * (1.0 - c);
 
     return matrix;
 }
@@ -116,11 +117,9 @@ void rotation_matrix_test()
 // Equation (3.62) page 87, MR pre-print 2019
 Eigen::Matrix4d transformation_matrix(const Eigen::Matrix3d &r, const Eigen::Vector3d &p)
 {
-    Eigen::Matrix4d matrix;
-    matrix << r(0, 0), r(0, 1), r(0, 2), p(0),
-        r(1, 0), r(1, 1), r(1, 2), p(1),
-        r(2, 0), r(2, 1), r(2, 2), p(2),
-        0, 0, 0, 1;
+    Eigen::Matrix4d matrix = Eigen::Matrix4d::Zero();
+    matrix.block<3, 3>(0, 0) = r;
+    matrix.block<3, 1>(0, 3) = p;
     return matrix;
 }
 
