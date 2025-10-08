@@ -3,9 +3,6 @@
 #include <numbers>
 #include <cmath>
 
-// NB: Uncomment line below on windows
-// constexpr double M_PI = std::numbers::pi;
-
 // ====================================== T.1 a) ======================================
 // Equations (B.3)–(B.5) on page 579, MR pre-print 2019
 Eigen::Vector3d euler_zyx_from_rotation_matrix(const Eigen::Matrix3d &R)
@@ -19,13 +16,13 @@ Eigen::Vector3d euler_zyx_from_rotation_matrix(const Eigen::Matrix3d &R)
 
     if (std::abs(r31 + 1.0) < eps)
     {
-        ang[1] = M_PI / 2.0;
+        ang[1] = EIGEN_PI / 2.0;
         ang[0] = 0.0;
         ang[2] = std::atan2(r12, r22);
     }
     else if (std::abs(r31 - 1.0) < eps)
     {
-        ang[1] = -M_PI / 2.0;
+        ang[1] = -EIGEN_PI / 2.0;
         ang[0] = 0.0;
         ang[2] = -std::atan2(r12, r22);
     }
@@ -39,7 +36,7 @@ Eigen::Vector3d euler_zyx_from_rotation_matrix(const Eigen::Matrix3d &R)
     return ang;
 }
 
-// Equation on page 65, MR pre-print 2019
+// Equation on page 72, MR pre-print 2019
 // From Assignment 1
 Eigen::Matrix3d rotate_x(double radians)
 {
@@ -51,11 +48,12 @@ Eigen::Matrix3d rotate_x(double radians)
     return R;
 }
 
-// Equation on page 65, MR pre-print 2019
+// Equation on page 72, MR pre-print 2019
 // From Assignment 1
 Eigen::Matrix3d rotate_y(double radians)
 {
-    const double cos = std::cos(radians), sin = std::sin(radians);
+    const double cos = std::cos(radians);
+    const double sin = std::sin(radians);
     Eigen::Matrix3d R;
     R << cos, 0, sin,
         0, 1, 0,
@@ -63,11 +61,12 @@ Eigen::Matrix3d rotate_y(double radians)
     return R;
 }
 
-// Equation on page 65, MR pre-print 2019
+// Equation on page 72, MR pre-print 2019
 // From Assignment 1
 Eigen::Matrix3d rotate_z(double radians)
 {
-    const double cos = std::cos(radians), sin = std::sin(radians);
+    const double cos = std::cos(radians);
+    const double sin = std::sin(radians);
     Eigen::Matrix3d R;
     R << cos, -sin, 0,
         sin, cos, 0,
@@ -98,7 +97,7 @@ void test_euler_zyx(double alpha, double beta, double gamma)
 }
 
 // ====================================== T.1 b) ======================================
-// Equation (3.74) on page 97, MR pre-print 2019
+// Equation (3.70) on page 97, MR pre-print 2019
 Eigen::VectorXd twist(const Eigen::Vector3d &w, const Eigen::Vector3d &v)
 {
     Eigen::VectorXd V_s(6);
@@ -206,7 +205,7 @@ void test_cot()
 {
     std::cout << "========================== T.1 e) ==========================" << "\n";
 
-    std::cout << "cot(pi/4) = " << cot(M_PI / 4) << "\n";
+    std::cout << "cot(pi/4) = " << cot(EIGEN_PI / 4) << "\n";
     std::cout << "Expected = 1\n"
               << "\n\n";
 }
@@ -231,7 +230,7 @@ void changeWrenchFrame()
     Eigen::Vector3d m_s(0, 0, 2);         // torque in sensor
     Eigen::Vector3d e_ws_deg(60, -60, 0); // ZYX Euler angles from sensor to world
 
-    Eigen::Vector3d e_ws = e_ws_deg * (M_PI / 180.0);
+    Eigen::Vector3d e_ws = e_ws_deg * (EIGEN_PI / 180.0);
 
     Eigen::Matrix3d R_ws =
         rotate_y(e_ws[0]) * rotate_z(e_ws[1]) * rotate_x(e_ws[2]);
@@ -286,13 +285,13 @@ void sensor_wrench_example_3_28()
 }
 
 // ====================================== T.3 a) ======================================
-// Equation on page 65, MR pre-print 2019
+// Equation on page 72, MR pre-print 2019
 // From Assignment 1
 Eigen::Matrix3d rotation_matrix_from_axis_angle(const Eigen::Vector3d &axis,
                                                 double degrees)
 {
     Eigen::Vector3d u = axis.normalized();
-    const double radians = degrees * M_PI / 180.0;
+    const double radians = degrees * EIGEN_PI / 180.0;
     const double cos = std::cos(radians);
     const double sin = std::sin(radians);
 
@@ -304,10 +303,10 @@ Eigen::Matrix3d rotation_matrix_from_axis_angle(const Eigen::Vector3d &axis,
     return matrix;
 }
 
-// Equation (3.51), page 81, MR pre-print 2019
+// Equation (3.51) on page 82, MR pre-print 2019
 Eigen::Matrix3d matrix_exponential(const Eigen::Vector3d &w, double theta)
 {
-    return rotation_matrix_from_axis_angle(w, theta * 180.0 / M_PI);
+    return rotation_matrix_from_axis_angle(w, theta * 180.0 / EIGEN_PI);
 }
 
 void test_matrix_exponential_SO3()
@@ -316,7 +315,7 @@ void test_matrix_exponential_SO3()
 
     // Rotation of 90 degree about z-axis
     Eigen::Vector3d w(0, 0, 1);
-    double theta = M_PI / 2.0;
+    double theta = EIGEN_PI / 2.0;
 
     Eigen::Matrix3d R = matrix_exponential(w, theta);
 
@@ -347,7 +346,7 @@ void test_matrix_logarithm_SO3()
 
     // Rotation of 90 degrees about z-axis
     Eigen::Vector3d w_true(0, 0, 1);
-    double theta_true = M_PI / 2.0;
+    double theta_true = EIGEN_PI / 2.0;
 
     Eigen::Matrix3d R = matrix_exponential(w_true, theta_true);
 
@@ -384,9 +383,9 @@ void test_matrix_exponential_SE3()
 {
     std::cout << "========================== T.3 c) ==========================\n";
 
-    Eigen::Vector3d w(0, 0, 1); // rotate about z
-    Eigen::Vector3d v(1, 0, 0); // translation direction
-    double theta = M_PI / 2.0;  // 90 degrees
+    Eigen::Vector3d w(0, 0, 1);    // rotate about z
+    Eigen::Vector3d v(1, 0, 0);    // translation direction
+    double theta = EIGEN_PI / 2.0; // 90 degrees
 
     Eigen::Matrix4d T = matrix_exponential(w, v, theta);
 
@@ -429,7 +428,7 @@ void test_matrix_logarithm_SE3()
     std::cout << "========================== T.3 d) ==========================\n";
 
     Eigen::Vector3d w(0, 0, 1), v(1, 0, 0);
-    double theta = M_PI / 2.0;
+    double theta = EIGEN_PI / 2.0;
     Eigen::Matrix4d T = matrix_exponential(w, v, theta);
 
     auto [S, th] = matrix_logarithm(T);
@@ -437,16 +436,15 @@ void test_matrix_logarithm_SE3()
     std::cout << "S^T = " << S.transpose() << "\n";
     std::cout << "theta = " << th << "\n";
     std::cout << "Expected S^T = 0 0 1 1 0 0\n";
-    std::cout << "Expected theta = " << M_PI / 2.0 << "\n\n";
+    std::cout << "Expected theta = " << EIGEN_PI / 2.0 << "\n\n";
 }
 
 // ====================================== T.4 a) ======================================
-// Equation (3.62) on page 87, MR pre-print 2019
 void print_pose(const std::string &label, const Eigen::Matrix4d &T)
 {
     const auto R = T.block<3, 3>(0, 0);
     const auto p = T.block<3, 1>(0, 3);
-    const Eigen::Vector3d e_deg = euler_zyx_from_rotation_matrix(R) * (180.0 / M_PI);
+    const Eigen::Vector3d e_deg = euler_zyx_from_rotation_matrix(R) * (180.0 / EIGEN_PI);
     std::cout << label << "\n"
               << "Euler ZYX (deg): " << e_deg.transpose() << "\n"
               << "Position:        " << p.transpose() << "\n\n";
@@ -456,7 +454,7 @@ void test_print_pose()
 {
     std::cout << "========================== T.4 a) ==========================\n";
     Eigen::Vector3d e_deg(90.0, 30.0, -45.0);
-    Eigen::Matrix3d R = rotate_z(e_deg[0] * M_PI / 180.0) * rotate_y(e_deg[1] * M_PI / 180.0) * rotate_x(e_deg[2] * M_PI / 180.0);
+    Eigen::Matrix3d R = rotate_z(e_deg[0] * EIGEN_PI / 180.0) * rotate_y(e_deg[1] * EIGEN_PI / 180.0) * rotate_x(e_deg[2] * EIGEN_PI / 180.0);
     Eigen::Matrix4d T = transformation_matrix(R, Eigen::Vector3d(1, 2, 3));
 
     print_pose("Pose T", T);
@@ -471,7 +469,7 @@ inline Eigen::Matrix4d Tx(double a)
     return transformation_matrix(Eigen::Matrix3d::Identity(), Eigen::Vector3d(a, 0, 0));
 }
 
-// Equation (4.4) on page 135, MR pre-print 2019
+// Equation (4.4-4.5) on page 135, MR pre-print 2019
 Eigen::Matrix4d planar_3r_fk_transform(const std::vector<double> &joint_positions)
 {
     const double L1 = 10.0, L2 = 10.0, L3 = 10.0;
@@ -480,9 +478,9 @@ Eigen::Matrix4d planar_3r_fk_transform(const std::vector<double> &joint_position
     const double q2d = joint_positions.size() > 1 ? joint_positions[1] : 0.0;
     const double q3d = joint_positions.size() > 2 ? joint_positions[2] : 0.0;
 
-    const double q1 = q1d * M_PI / 180.0;
-    const double q2 = q2d * M_PI / 180.0;
-    const double q3 = q3d * M_PI / 180.0;
+    const double q1 = q1d * EIGEN_PI / 180.0;
+    const double q2 = q2d * EIGEN_PI / 180.0;
+    const double q3 = q3d * EIGEN_PI / 180.0;
 
     Eigen::Matrix4d T =
         transformation_matrix(rotate_z(q1), Eigen::Vector3d::Zero()) * Tx(L1) *
@@ -516,9 +514,9 @@ Eigen::Matrix4d planar_3r_fk_screw(const std::vector<double> &joint_positions)
 {
     const double L1 = 10.0, L2 = 10.0, L3 = 10.0;
 
-    const double q1 = (joint_positions.size() > 0 ? joint_positions[0] : 0.0) * M_PI / 180.0;
-    const double q2 = (joint_positions.size() > 1 ? joint_positions[1] : 0.0) * M_PI / 180.0;
-    const double q3 = (joint_positions.size() > 2 ? joint_positions[2] : 0.0) * M_PI / 180.0;
+    const double q1 = (joint_positions.size() > 0 ? joint_positions[0] : 0.0) * EIGEN_PI / 180.0;
+    const double q2 = (joint_positions.size() > 1 ? joint_positions[1] : 0.0) * EIGEN_PI / 180.0;
+    const double q3 = (joint_positions.size() > 2 ? joint_positions[2] : 0.0) * EIGEN_PI / 180.0;
 
     const Eigen::Vector3d omega(0, 0, 1);
     const Eigen::VectorXd S1 = screw_axis(Eigen::Vector3d(0, 0, 0), omega, 0.0);
@@ -576,16 +574,17 @@ Eigen::Matrix4d ur3e_fk_screw(const std::vector<double> &q_deg)
 {
     static const double a_link[6] = {0.0, -0.24355, -0.21320, 0.0, 0.0, 0.0};
     static const double d_link[6] = {0.15185, 0.0, 0.0, 0.13105, 0.08535, 0.09210};
-    static const double alpha_link[6] = {M_PI / 2, 0.0, 0.0, M_PI / 2, -M_PI / 2, 0.0};
+    static const double alpha_link[6] = {EIGEN_PI / 2, 0.0, 0.0, EIGEN_PI / 2, -EIGEN_PI / 2, 0.0};
 
     auto rad = [](double deg)
-    { return deg * M_PI / 180.0; };
+    { return deg * EIGEN_PI / 180.0; };
 
     Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
     Eigen::Vector3d o = Eigen::Vector3d::Zero();
     Eigen::Vector3d z = Eigen::Vector3d::UnitZ();
     Eigen::Matrix<double, 6, 1> S[6];
 
+    // Equation (4.7) on page 137, MR pre-print 2019
     for (int i = 0; i < 6; ++i)
     {
         S[i].head<3>() = z;
@@ -595,8 +594,9 @@ Eigen::Matrix4d ur3e_fk_screw(const std::vector<double> &q_deg)
         o = T.block<3, 1>(0, 3);
         z = T.block<3, 3>(0, 0) * Eigen::Vector3d::UnitZ();
     }
-    const Eigen::Matrix4d M = T;
+    const Eigen::Matrix4d M = T; // Equation (4.6) on page 136, MR pre-print 2019
 
+    // Equation (4.10) on page 138, MR pre-print 2019
     Eigen::Matrix4d G = Eigen::Matrix4d::Identity();
     for (int i = 0; i < 6; ++i)
     {
@@ -622,20 +622,22 @@ void test_ur3e_fk_screw()
 }
 
 // ====================================== T.5 b) ======================================
+// Equation (C.1) on page 587, MR pre-print 2019
+// Equations (C.2-C.5) on page 592, MR pre-print 2019
 Eigen::Matrix4d ur3e_fk_transform(const std::vector<double> &q_deg)
 {
     static const double a[6] = {0.0, -0.24355, -0.21320, 0.0, 0.0, 0.0};
     static const double d[6] = {0.15185, 0.0, 0.0, 0.13105, 0.08535, 0.09210};
-    static const double alpha[6] = {M_PI / 2, 0.0, 0.0, M_PI / 2, -M_PI / 2, 0.0};
+    static const double alpha[6] = {EIGEN_PI / 2, 0.0, 0.0, EIGEN_PI / 2, -EIGEN_PI / 2, 0.0};
 
     auto rad = [](double deg)
-    { return deg * M_PI / 180.0; };
+    { return deg * EIGEN_PI / 180.0; };
 
     Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
     for (int i = 0; i < 6; ++i)
     {
         const double theta = (i < (int)q_deg.size()) ? rad(q_deg[i]) : 0.0;
-        T *= A(a[i], alpha[i], d[i], theta); // your DH “A” from T.5b
+        T *= A(a[i], alpha[i], d[i], theta);
     }
     return T;
 }
@@ -670,7 +672,7 @@ void test_ur3e_fk_transform_vs_screw()
 int main()
 {
     // T.1 a)
-    test_euler_zyx(M_PI / 4, M_PI / 6, -M_PI / 3);
+    test_euler_zyx(EIGEN_PI / 4.0, EIGEN_PI / 6.0, -EIGEN_PI / 3.0);
 
     // T.1 b)
     test_twist();
