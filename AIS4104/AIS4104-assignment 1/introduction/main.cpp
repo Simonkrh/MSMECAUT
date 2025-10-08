@@ -126,7 +126,7 @@ Eigen::Matrix4d transformation_matrix(const Eigen::Matrix3d &r, const Eigen::Vec
 // T.3 b)
 void transformation_matrix_test()
 {
-    Eigen::Matrix3d r = rotation_matrix_from_euler_zyx(Eigen::Vector3d{45, -45.0, 90.0});
+    Eigen::Matrix3d r = rotation_matrix_from_euler_zyx(Eigen::Vector3d{45.0, -45.0, 90.0});
     Eigen::Vector3d v{1.0, -2.0, 3.0};
     std::cout << "transformation_matrix: " << std::endl;
     std::cout << transformation_matrix(r, v) << std::endl;
