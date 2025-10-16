@@ -1,0 +1,12 @@
+
+*.bootinfo
+*.bootinfo_guids
+*.compileinfo
+*.precompilecache
+*.opt
+*.project.precompilecache
+
+
+*.simulation*
+*.bootproject
+*.app
