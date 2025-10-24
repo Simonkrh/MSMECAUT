@@ -2,8 +2,7 @@
 #include <iostream>
 
 static constexpr double deg_to_rad = EIGEN_PI / 180.0;
-
-// ====================================== From previous assignments ======================================
+// ============================ From previous assignments =============================
 // Equation (3.62) page 87, MR pre-print 2019
 // From Assignment 1
 Eigen::Matrix4d transformation_matrix(const Eigen::Matrix3d &r, const Eigen::Vector3d &p)
@@ -266,7 +265,7 @@ Eigen::Matrix4d ur3e_body_fk(const Eigen::VectorXd &joint_positions)
 // ====================================== T.1 g) ======================================
 void ur3e_test_fk()
 {
-    std::cout << "Forward kinematics tests" << std::endl;
+    std::cout << "=================================== Forward kinematics tests ===================================" << std::endl;
 
     print_pose("Space FK (0,0,0,0,0,0)",
                ur3e_space_fk(std_vector_to_eigen({0.0, 0.0, 0.0, 0.0, 0.0, 0.0}) * deg_to_rad));
@@ -373,7 +372,7 @@ void test_gradient_descent_minimize(const std::function<double(double)> &f, doub
 
 void test_optimizations()
 {
-    std::cout << "Root finding tests" << std::endl;
+    std::cout << "====================================== Root finding tests ======================================" << std::endl;
     auto f1 = [](double x)
     {
         return (x - 3.0) * (x - 3.0) - 1.0;
@@ -382,8 +381,90 @@ void test_optimizations()
     test_gradient_descent_minimize(f1, -20.0);
 }
 
+// ====================================== T.3 a) ======================================
+// Equation (5.11) on page 178, MR pre-print 2019
+Eigen::MatrixXd ur3e_space_jacobian(const Eigen::VectorXd &current_joint_positions)
+{
+    auto [M, S_list] = ur3e_space_chain();
+
+    Eigen::MatrixXd space_jacobian(6, 6);
+    Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
+
+    // Equation 5.11 on page 178, MR pre-print 2019
+    for (int i = 0; i < 6; ++i)
+    {
+        space_jacobian.col(i) = adjoint_matrix(T) * S_list[i];
+
+        const Eigen::Vector3d w = S_list[i].head<3>();
+        const Eigen::Vector3d v = S_list[i].tail<3>();
+        T = T * matrix_exponential(w, v, current_joint_positions[i]);
+    }
+
+    return space_jacobian;
+}
+
+// ====================================== T.3 b) ======================================
+// Equation (5.18) on page 183, MR pre-print 2019
+Eigen::MatrixXd ur3e_body_jacobian(const Eigen::VectorXd &current_joint_positions)
+{
+    auto [M, B_list] = ur3e_body_chain();
+
+    Eigen::MatrixXd body_jacobian(6, 6);
+    Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
+
+    body_jacobian.col(5) = B_list[5];
+
+    // Equation (5.18) on page 183, MR pre-print 2019
+    for (int i = 4; i >= 0; --i) // Second to last joint
+    {
+        const Eigen::Vector3d w = B_list[i + 1].head<3>();
+        const Eigen::Vector3d v = B_list[i + 1].tail<3>();
+        T = T * matrix_exponential(w, v, -current_joint_positions[i + 1]);
+
+        body_jacobian.col(i) = adjoint_matrix(T) * B_list[i];
+    }
+
+    return body_jacobian;
+}
+
+// ====================================== T.3 c) ======================================
+void ur3e_test_jacobian(const Eigen::VectorXd &joint_positions)
+{
+    Eigen::Matrix4d tsb = ur3e_body_fk(joint_positions);
+    auto [m, space_screws] = ur3e_space_chain();
+    Eigen::MatrixXd jb = ur3e_body_jacobian(joint_positions);
+    Eigen::MatrixXd js = ur3e_space_jacobian(joint_positions);
+    Eigen::MatrixXd ad_tsb = adjoint_matrix(tsb);
+    Eigen::MatrixXd ad_tbs = adjoint_matrix(tsb.inverse());
+    std::cout << "Jb: " << std::endl
+              << jb << std::endl
+              << "Ad_tbs*Js:" << std::endl
+              << ad_tbs * js << std::endl
+              << std::endl;
+    std::cout << "Js: " << std::endl
+              << js << std::endl
+              << "Ad_tsb*Jb:" << std::endl
+              << ad_tsb * jb << std::endl
+              << std::endl;
+    std::cout << "d Jb: " << std::endl
+              << jb - ad_tbs * js << std::endl
+              << std::endl;
+    std::cout << "d Js: " << std::endl
+              << js - ad_tsb * jb << std::endl
+              << std::endl;
+}
+void ur3e_test_jacobian()
+{
+    std::cout << std::endl
+              << "==================================== Jacobian matrix tests =====================================" << std::endl;
+    ur3e_test_jacobian(std_vector_to_eigen(std::vector<double>{0.0, 0.0, 0.0, 0.0, 0.0, 0.0}) *
+                       deg_to_rad);
+    ur3e_test_jacobian(std_vector_to_eigen(std::vector<double>{45.0, -20.0, 10.0, 2.5, 30.0, -50.0}) *
+                       deg_to_rad);
+}
 int main()
 {
     ur3e_test_fk();
     test_optimizations();
+    ur3e_test_jacobian();
 }
