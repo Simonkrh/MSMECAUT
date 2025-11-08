@@ -2,6 +2,8 @@
 #include <iostream>
 
 static constexpr double deg_to_rad = EIGEN_PI / 180.0;
+static constexpr double rad_to_deg = 180.0 / EIGEN_PI;
+
 // ============================ From previous assignments =============================
 // Equation (3.62) page 87, MR pre-print 2019
 // From Assignment 1
@@ -138,6 +140,39 @@ void print_pose(const std::string &label, const Eigen::Matrix4d &T)
     std::cout << label << "\n"
               << "Euler ZYX (deg): " << e_deg.transpose() << "\n"
               << "Position:        " << p.transpose() << "\n\n";
+}
+
+// From assignment 2
+// Equations (3.53-3.54) on page 84, MR pre-print 2019
+std::pair<Eigen::Vector3d, double> matrix_logarithm(const Eigen::Matrix3d &R)
+{
+    double theta = std::acos(std::clamp((R.trace() - 1.0) * 0.5, -1.0, 1.0));
+    double s = std::sin(theta);
+    Eigen::Vector3d w((R(2, 1) - R(1, 2)) / (2 * s),
+                      (R(0, 2) - R(2, 0)) / (2 * s),
+                      (R(1, 0) - R(0, 1)) / (2 * s));
+    w.normalize();
+    return {w, theta};
+}
+
+// Equation on page 72, MR pre-print 2019
+// From Assignment 1
+Eigen::Matrix3d rotate_y(double radians)
+{
+    const double cos = std::cos(radians);
+    const double sin = std::sin(radians);
+    Eigen::Matrix3d R;
+    R << cos, 0, sin,
+        0, 1, 0,
+        -sin, 0, cos;
+    return R;
+}
+
+// Equation on page 577, MR pre-print 2019
+// From Assignment 1
+Eigen::Matrix3d rotation_matrix_from_euler_zyx(const Eigen::Vector3d &e)
+{
+    return rotate_z(e[0]) * rotate_y(e[1]) * rotate_x(e[2]);
 }
 
 // ====================================== T.1 a) ======================================
@@ -462,9 +497,93 @@ void ur3e_test_jacobian()
     ur3e_test_jacobian(std_vector_to_eigen(std::vector<double>{45.0, -20.0, 10.0, 2.5, 30.0, -50.0}) *
                        deg_to_rad);
 }
+
+// ====================================== T.4 a) ======================================
+// Equations found on page 228, Mr pre-print 2019
+std::pair<size_t, Eigen::VectorXd> ur3e_ik_body(const Eigen::Matrix4d &t_sd, const Eigen::VectorXd &current_joint_positions, double gamma = 1e-2, double v_e = 4e-3, double w_e = 4e-3)
+{
+    Eigen::VectorXd joint_positions = current_joint_positions;
+    size_t iteration = 0;
+
+    while (true)
+    {
+        const Eigen::Matrix4d tsb = ur3e_body_fk(joint_positions);
+
+        // T_bd = T_sb^{-1} * T_sd
+        const Eigen::Matrix4d T_bd = tsb.inverse() * t_sd;
+
+        const auto [screw_axis, theta] = matrix_logarithm(T_bd); // This is wrong, since it only works for 3x3 rotation matrices
+        const Eigen::VectorXd Vb = screw_axis * theta;           // [ω_b; v_b]
+        const Eigen::Vector3d w_b = Vb.head<3>();
+        const Eigen::Vector3d v_b = Vb.tail<3>();
+
+        // For small ε_ω, ε_v
+        if (w_b.norm() < w_e && v_b.norm() < v_e)
+            return {iteration, joint_positions};
+
+        const Eigen::MatrixXd Jb = ur3e_body_jacobian(joint_positions);
+
+        const Eigen::MatrixXd Jb_plus =
+            Jb.completeOrthogonalDecomposition().pseudoInverse();
+
+        // θ^{i+1} = θ^{i} + J_b^+ * V_b
+        const Eigen::VectorXd dq = Jb_plus * Vb;
+
+        joint_positions += dq;
+        ++iteration;
+    }
+}
+
+// ====================================== T.4 b) ======================================
+void ur3e_ik_test_pose(const Eigen::Vector3d &pos, const Eigen::Vector3d &zyx, const Eigen::VectorXd &j0)
+{
+    std::cout << "Test from pose" << std::endl;
+    Eigen::Matrix4d t_sd = transformation_matrix(rotation_matrix_from_euler_zyx(zyx), pos);
+    auto [iterations, j_ik] = ur3e_ik_body(t_sd, j0);
+    Eigen::Matrix4d t_ik = ur3e_body_fk(j_ik);
+    print_pose("IK pose", t_ik);
+    print_pose("Desired pose", t_sd);
+    std::cout << "Converged after " << iterations << " iterations" << std::endl;
+    std::cout << "J_0: " << j0.transpose() * rad_to_deg << std::endl;
+    std::cout << "J_ik: " << j_ik.transpose() * rad_to_deg << std::endl
+              << std::endl;
+}
+
+void ur3e_ik_test_configuration(const Eigen::VectorXd &joint_positions, const Eigen::VectorXd &j0)
+{
+    std::cout << "Test from configuration" << std::endl;
+    Eigen::Matrix4d t_sd = ur3e_space_fk(joint_positions);
+    auto [iterations, j_ik] = ur3e_ik_body(t_sd, j0);
+    Eigen::Matrix4d t_ik = ur3e_body_fk(j_ik);
+    print_pose(" IK pose", t_ik);
+    print_pose("Desired pose", t_sd);
+    std::cout << "Converged after " << iterations << " iterations" << std::endl;
+    std::cout << "J_0: " << j0.transpose() * rad_to_deg << std::endl;
+    std::cout << "J_d: " << joint_positions.transpose() * rad_to_deg << std::endl;
+    std::cout << "J_ik: " << j_ik.transpose() * rad_to_deg << std::endl
+              << std::endl;
+}
+
+void ur3e_ik_test()
+{
+    Eigen::VectorXd j_t0 = std_vector_to_eigen(std::vector<double>{0.0, 0.0, 0.0, 0.0, 0.0, 0.0}) *
+                           deg_to_rad;
+    Eigen::VectorXd j_t1 = std_vector_to_eigen(std::vector<double>{0.0, 0.0, -89.0, 0.0, 0.0, 0.0}) *
+                           deg_to_rad;
+    ur3e_ik_test_pose(Eigen::Vector3d{0.3289, 0.22315, 0.36505}, Eigen::Vector3d{0.0, 90.0, -90.0} * deg_to_rad, j_t0);
+    ur3e_ik_test_pose(Eigen::Vector3d{0.3289, 0.22315, 0.36505}, Eigen::Vector3d{0.0, 90.0, -90.0} * deg_to_rad, j_t1);
+    Eigen::VectorXd j_t2 = std_vector_to_eigen(std::vector<double>{50.0, -30.0, 20, 0.0, -30.0, 50.0}) * deg_to_rad;
+    Eigen::VectorXd j_d1 = std_vector_to_eigen(std::vector<double>{45.0, -20.0, 10.0, 2.5, 30.0,
+                                                                   -50.0}) *
+                           deg_to_rad;
+    ur3e_ik_test_configuration(j_d1, j_t0);
+    ur3e_ik_test_configuration(j_d1, j_t2);
+}
+
 int main()
 {
     ur3e_test_fk();
     test_optimizations();
     ur3e_test_jacobian();
+    ur3e_ik_test();
 }
